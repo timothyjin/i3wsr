@@ -227,12 +227,36 @@ pub fn update_tree(
     i3_conn: &mut I3Connection,
     config: &Config,
 ) -> Result<(), Error> {
+
+    let separator = match config.general.get("separator") {
+        Some(s) => s,
+        None => " | ",
+    };
+
     let tree = i3_conn.get_tree()?;
+    let ws_infos = i3_conn.get_workspaces()?.workspaces;
+    let mut prev_output = "";
+    let mut index = 0;
+    let mut n = 1;
     for workspace in get_workspaces(tree) {
-        let separator = match config.general.get("separator") {
-            Some(s) => s,
-            None => " | ",
+        let old: String = workspace
+            .name
+            .to_owned()
+            .ok_or_else(|| LookupError::WorkspaceName(Box::new(workspace.clone())))?;
+
+        // Skip scratchpad workspace
+        if old.as_str() == "__i3_scratch" {
+            continue;
+        }
+
+        // Leave gap of one workspace between outputs
+        let output = match ws_infos.get(index) {
+            Some(info) => &info.output,
+            None => prev_output,
         };
+        if output != prev_output && prev_output != "" {
+            n += 1;
+        }
 
         let classes = get_classes(&workspace, &x_conn, config);
         let classes = if get_option(&config, "remove_duplicates") {
@@ -241,20 +265,11 @@ pub fn update_tree(
             classes
         };
         let classes = classes.join(separator);
-        let classes = if !classes.is_empty() {
-            format!(" {}", classes)
-        } else {
-            classes
-        };
 
-        let old: String = workspace
-            .name
-            .to_owned()
-            .ok_or_else(|| LookupError::WorkspaceName(Box::new(workspace)))?;
-
-        let mut new = old.split(' ').next().unwrap().to_owned();
+        let mut new = n.to_string();
 
         if !classes.is_empty() {
+            new.push_str(". ");
             new.push_str(&classes);
         }
 
@@ -262,6 +277,10 @@ pub fn update_tree(
             let command = format!("rename workspace \"{}\" to \"{}\"", old, new);
             i3_conn.run_command(&command)?;
         }
+
+        prev_output = output;
+        index += 1;
+        n += 1;
     }
     Ok(())
 }
