@@ -139,7 +139,13 @@ fn get_class(conn: &xcb::Connection, id: u32, config: &Config) -> Result<String,
             }
         }
         None => match config.general.get("default_icon") {
-            Some(default_icon) => format!("{} {}", default_icon, display_name),
+            Some(default_icon) => {
+                if get_option(&config, "no_names") {
+                    format!("{}", default_icon)
+                } else {
+                    format!("{} {}", default_icon, display_name)
+                }
+            }
             None => format!("{}", display_name),
         },
     })
